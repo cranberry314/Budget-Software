@@ -1,0 +1,1 @@
+For the moment this works only for CapitalOne data, I will add to this shortly. I have also removed data from the libraries so as to not give away personal information, I have left some information as an example but you will need to rebuild them.
