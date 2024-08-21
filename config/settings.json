@@ -1,0 +1,5 @@
+{
+    "location": "/path/to/Budget/script",
+    "credit_card_file": "credit_card_file.csv",
+    "bank_statement_file": "checking_account_export.csv"
+}
