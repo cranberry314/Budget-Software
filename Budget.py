@@ -44,11 +44,16 @@ bank_statement_file = settings['bank_statement_file']
 bank_df = pd.read_csv(f"{location}/{bank_statement_file}")
 bank_df['Transaction Date'] = pd.to_datetime(bank_df['Transaction Date'], format='%m/%d/%y')
 
-# Filter out current month and year transactions
+
 now = datetime.now()
-current_month, current_year = now.month, now.year
-bank_df = bank_df[~((bank_df['Transaction Date'].dt.month == current_month) & 
-                     (bank_df['Transaction Date'].dt.year == current_year))]
+cutoff_date = (now - pd.DateOffset(months=12)).replace(day=1)
+
+# Filter out transactions from the current month and year, and those older than 12 months
+bank_df = bank_df[
+    (bank_df['Transaction Date'] < pd.Timestamp(now.replace(day=1))) & 
+    (bank_df['Transaction Date'] >= cutoff_date)
+]
+
 
 # Monthly income calculation
 income_df = bank_df[bank_df['Transaction Description'] == 'Deposit from CAPITAL ONE SERV REG.SALARY']
@@ -123,11 +128,18 @@ def classify_detailed_description(row):
 
 credit_df['Detailed Description'] = credit_df.apply(classify_detailed_description, axis=1)
 
-
+now = datetime.now()
+cutoff_date = (now - pd.DateOffset(months=12)).replace(day=1)
 
 credit_df['Transaction Date'] = pd.to_datetime(credit_df['Transaction Date'])
-credit_df = credit_df[~((credit_df['Transaction Date'].dt.month == current_month) & 
-                         (credit_df['Transaction Date'].dt.year == current_year))]
+
+# Filter out transactions from the current month and year, and those older than 12 months
+credit_df = credit_df[
+    (credit_df['Transaction Date'] < pd.Timestamp(now.replace(day=1))) & 
+    (credit_df['Transaction Date'] >= cutoff_date)
+]
+
+
 credit_df['YearMonth'] = credit_df['Transaction Date'].dt.to_period('M')
 
 
@@ -337,7 +349,7 @@ ax_33.grid(True)
 
 
 
-import matplotlib.pyplot as plt
+
 import seaborn as sns
 
 # Load the Anscombe's quartet dataset
