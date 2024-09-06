@@ -241,16 +241,21 @@ ax2.xaxis.set_visible(False)  # Hide the X-axis ticks and labels
 #
 
 # Detailed summary lives up here till I can get things sorted
-monthly_detailed_summary_df = pd.concat([
-    bank_df.groupby(['YearMonth', 'Detailed Description'])['Debit'].agg(['sum', 'mean']).reset_index(),
-    credit_df.groupby(['YearMonth', 'Detailed Description'])['Debit'].agg(['sum', 'mean']).reset_index()
-], ignore_index=True)
+# Group by 'YearMonth' and 'Detailed Description' and sum the 'Debit' values
+bank_grouped = bank_df.groupby(['YearMonth', 'Detailed Description'])['Debit'].sum().reset_index()
+credit_grouped = credit_df.groupby(['YearMonth', 'Detailed Description'])['Debit'].sum().reset_index()
 
-# Rename 'sum' to 'Total'
-monthly_detailed_summary_df.rename(columns={'sum': 'Total'}, inplace=True)
+# Merge the bank and credit data on 'YearMonth' and 'Detailed Description'
+merged_df = pd.merge(bank_grouped, credit_grouped, on=['YearMonth', 'Detailed Description'], how='outer', suffixes=('_bank', '_credit'))
 
-# Remove rows where 'Total' is zero
-monthly_detailed_summary_df = monthly_detailed_summary_df[monthly_detailed_summary_df['Total'] != 0]
+# Fill NaN values with 0 for any missing data
+merged_df.fillna(0, inplace=True)
+
+# Sum the 'Debit' amounts from both bank and credit
+merged_df['Total'] = merged_df['Debit_bank'] + merged_df['Debit_credit']
+
+# Select relevant columns
+monthly_detailed_summary_df = merged_df[['YearMonth', 'Detailed Description', 'Total']]
 
 
 
@@ -306,42 +311,42 @@ gs = GridSpec(2, 2, figure=fig2)  # Create a new grid for the existing figure
 inner_grid = gs[0, 1].subgridspec(3, 1, hspace=1.5)  # Divide the top-right corner into a 3x1 grid
 
 
+import seaborn as sns
+
 # Create Uber dataframe for graphing
 uber_monthly_totals = monthly_detailed_summary_df[monthly_detailed_summary_df['Detailed Description'] == 'Uber'].reset_index()
 uber_monthly_totals['Date'] = uber_monthly_totals['YearMonth'].dt.to_timestamp()
 
-## Plot "Uber" data in the first subplot of the top-right corner
+# Plot "Uber" data with Seaborn (scatter points and regression line)
 ax_21 = fig2.add_subplot(inner_grid[0])
-ax_21.plot(uber_monthly_totals['Date'], uber_monthly_totals['Total'], 
-              marker='o', linestyle='-', color='r', linewidth=2, markersize=6)
+sns.regplot(x=uber_monthly_totals['Date'].astype(int), y=uber_monthly_totals['Total'], 
+            scatter_kws={'s': 50, 'color': 'r'}, line_kws={'color': 'r'}, ax=ax_21)
 ax_21.set_title('Uber Monthly Totals')
 ax_21.set_xlabel('Month')
 ax_21.set_ylabel('Total Amount ($)')
 ax_21.grid(True)
 
-
-## Create Groceries dataframe for graphing
+# Create Groceries dataframe for graphing
 groceries_monthly_totals = monthly_detailed_summary_df[monthly_detailed_summary_df['Detailed Description'] == 'Groceries'].reset_index()
 groceries_monthly_totals['Date'] = groceries_monthly_totals['YearMonth'].dt.to_timestamp()
 
-# Plot "Groceries" data in the second subplot of the top-right corner
+# Plot "Groceries" data with Seaborn (scatter points and regression line)
 ax_22 = fig2.add_subplot(inner_grid[1])
-ax_22.plot(groceries_monthly_totals['Date'], groceries_monthly_totals['Total'], 
-              marker='o', linestyle='-', color='b', linewidth=2, markersize=6)
+sns.regplot(x=groceries_monthly_totals['Date'].astype(int), y=groceries_monthly_totals['Total'], 
+            scatter_kws={'s': 50, 'color': 'b'}, line_kws={'color': 'b'}, ax=ax_22)
 ax_22.set_title('Groceries Monthly Totals')
 ax_22.set_xlabel('Month')
 ax_22.set_ylabel('Total Amount ($)')
 ax_22.grid(True)
 
-
-## Create Dining dataframe for graphing
+# Create Dining dataframe for graphing
 dining_monthly_totals = monthly_detailed_summary_df[monthly_detailed_summary_df['Detailed Description'] == 'Dining'].reset_index()
 dining_monthly_totals['Date'] = dining_monthly_totals['YearMonth'].dt.to_timestamp()
 
-## Plot "Dining" data in the third subplot of the top-right corner
+# Plot "Dining" data with Seaborn (scatter points and regression line)
 ax_33 = fig2.add_subplot(inner_grid[2])
-ax_33.plot(dining_monthly_totals['Date'], dining_monthly_totals['Total'], 
-              marker='o', linestyle='-', color='g', linewidth=2, markersize=6)
+sns.regplot(x=dining_monthly_totals['Date'].astype(int), y=dining_monthly_totals['Total'], 
+            scatter_kws={'s': 50, 'color': 'g'}, line_kws={'color': 'g'}, ax=ax_33)
 ax_33.set_title('Dining Monthly Totals')
 ax_33.set_xlabel('Month')
 ax_33.set_ylabel('Total Amount ($)')
@@ -349,8 +354,7 @@ ax_33.grid(True)
 
 
 
-
-import seaborn as sns
+#import seaborn as sns
 
 # Load the Anscombe's quartet dataset
 anscombe_df = sns.load_dataset('anscombe')
