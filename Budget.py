@@ -34,68 +34,88 @@ import config.dictionaries as dicts
 with open('config/settings.json') as f:
     settings = json.load(f)
 
+
 # File paths
 location = settings['location']
-credit_card_file = settings['credit_card_file']
 bank_statement_file = settings['bank_statement_file']
-
-# Read and process bank data
-# this is done separately from Credit so that the two can be standardized before being combined
-bank_df = pd.read_csv(f"{location}/{bank_statement_file}")
-bank_df['Transaction Date'] = pd.to_datetime(bank_df['Transaction Date'], format='%m/%d/%y')
-
+credit_card_file = settings['credit_card_file']
 
 now = datetime.now()
 cutoff_date = (now - pd.DateOffset(months=12)).replace(day=1)
 
-# Filter out transactions from the current month and year, and those older than 12 months
-bank_df = bank_df[
-    (bank_df['Transaction Date'] < pd.Timestamp(now.replace(day=1))) & 
-    (bank_df['Transaction Date'] >= cutoff_date)
-]
+# Function to process bank data
+def process_bank_data(settings_file='config/settings.json'):
+    """
+    This function processes the bank data by reading a CSV file, classifying the transactions,
+    calculating the monthly income, and returning the processed DataFrames for further analysis.
+
+    Parameters:
+    settings_file (str): Path to the JSON configuration file containing file locations.
+
+    Returns:
+    bank_df (DataFrame): The processed bank data.
+    monthly_income_df (DataFrame): Monthly income calculated from the data.
+    monthly_bank_debit_summary_df (DataFrame): Monthly debit summary excluding credit card transactions.
+    """
+    
+
+    # Read and process bank data
+    bank_df = pd.read_csv(f"{location}/{bank_statement_file}")
+    bank_df['Transaction Date'] = pd.to_datetime(bank_df['Transaction Date'], format='%m/%d/%y')
 
 
-# Monthly income calculation
-income_df = bank_df[bank_df['Transaction Description'] == 'Deposit from CAPITAL ONE SERV REG.SALARY']
-monthly_income_df = income_df.groupby([income_df['Transaction Date'].dt.to_period('M')])['Transaction Amount'].sum().reset_index()
-monthly_income_df.rename(columns={'Transaction Date': 'YearMonth', 'Transaction Amount': 'Income'}, inplace=True)
+    # Filter out transactions from the current month and year, and those older than 12 months
+    bank_df = bank_df[
+        (bank_df['Transaction Date'] < pd.Timestamp(now.replace(day=1))) & 
+        (bank_df['Transaction Date'] >= cutoff_date)
+    ]
 
-# Create end-of-month dates
-monthly_income_df['Date'] = monthly_income_df['YearMonth'].dt.to_timestamp() + pd.offsets.MonthEnd()
-monthly_income_df.sort_values(by='Date', ascending=True, inplace=True)
+    # Monthly income calculation
+    income_df = bank_df[bank_df['Transaction Description'] == 'Deposit from CAPITAL ONE SERV REG.SALARY']
+    monthly_income_df = income_df.groupby([income_df['Transaction Date'].dt.to_period('M')])['Transaction Amount'].sum().reset_index()
+    monthly_income_df.rename(columns={'Transaction Date': 'YearMonth', 'Transaction Amount': 'Income'}, inplace=True)
 
-# Classify bank transactions
-description_to_category = dicts.DESCRIPTION_TO_CATEGORY
+    # Create end-of-month dates
+    monthly_income_df['Date'] = monthly_income_df['YearMonth'].dt.to_timestamp() + pd.offsets.MonthEnd()
+    monthly_income_df.sort_values(by='Date', ascending=True, inplace=True)
 
-def classify_description(description):
-    for key, category in description_to_category.items():
-        if key in description:
-            return category
-    return description
+    # Classify bank transactions
+    def classify_description(description):
+        for key, category in dicts.DESCRIPTION_TO_CATEGORY.items():
+            if key in description:
+                return category
+        return description
 
-bank_df['General Description'] = bank_df['Transaction Description'].apply(classify_description)
+    bank_df['General Description'] = bank_df['Transaction Description'].apply(classify_description)
 
-# Add a Detailed Description
-description_to_detail_category = dicts.DESCRIPTION_TO_DETAIL_CATEGORY
+    # Add a Detailed Description
+    def classify_detailed_description(description):
+        """Classifies the description into a more detailed category."""
+        for key, detail_category in dicts.DESCRIPTION_TO_DETAIL_CATEGORY.items():
+            if key in description:
+                return detail_category
+        return description
 
-def classify_detailed_description(description):
-    """Classifies the description into a more detailed category."""
-    for key, detail_category in description_to_detail_category.items():
-        if key in description:
-            return detail_category
-    return description
+    bank_df['Detailed Description'] = bank_df['Transaction Description'].apply(classify_detailed_description)
 
-bank_df['Detailed Description'] = bank_df['Transaction Description'].apply(classify_detailed_description)
+    # Remove Taxes and prepare data for plotting
+    bank_df = bank_df[bank_df['General Description'] != 'Taxes']
+    bank_df['Debit'] = bank_df.apply(lambda row: row['Transaction Amount'] if row['Transaction Type'] == 'Debit' else 0, axis=1)
+    bank_df['Credit'] = bank_df.apply(lambda row: row['Transaction Amount'] if row['Transaction Type'] == 'Credit' else 0, axis=1)
+    bank_df['YearMonth'] = bank_df['Transaction Date'].dt.to_period('M')
 
-# Remove Taxes and prepare data for plotting
-bank_df = bank_df[bank_df['General Description'] != 'Taxes']
-bank_df['Debit'] = bank_df.apply(lambda row: row['Transaction Amount'] if row['Transaction Type'] == 'Debit' else 0, axis=1)
-bank_df['Credit'] = bank_df.apply(lambda row: row['Transaction Amount'] if row['Transaction Type'] == 'Credit' else 0, axis=1)
-bank_df['YearMonth'] = bank_df['Transaction Date'].dt.to_period('M')
+    # Filter out credit card transactions and prepare a monthly debit summary
+    bank_debit_df = bank_df[bank_df['General Description'] != 'Credit Card'].drop(columns=['Credit'])
+    monthly_bank_debit_summary_df = bank_debit_df.groupby(['YearMonth', 'General Description'])['Debit'].sum().reset_index()
+    monthly_bank_debit_summary_df = monthly_bank_debit_summary_df[monthly_bank_debit_summary_df['Debit'] != 0]
 
-bank_debit_df = bank_df[bank_df['General Description'] != 'Credit Card'].drop(columns=['Credit'])
-monthly_bank_debit_summary_df = bank_debit_df.groupby(['YearMonth', 'General Description'])['Debit'].sum().reset_index()
-monthly_bank_debit_summary_df = monthly_bank_debit_summary_df[monthly_bank_debit_summary_df['Debit'] != 0]
+    return bank_df, monthly_income_df, monthly_bank_debit_summary_df
+
+# Example usage:
+bank_df, monthly_income_df, monthly_bank_debit_summary_df = process_bank_data()
+
+
+
 
 # Process credit card data
 # Load credit card data
