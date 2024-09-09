@@ -111,66 +111,86 @@ def process_bank_data(settings_file='config/settings.json'):
 
     return bank_df, monthly_income_df, monthly_bank_debit_summary_df
 
-# Example usage:
+# Call process_bank_data function
 bank_df, monthly_income_df, monthly_bank_debit_summary_df = process_bank_data()
 
 
+# Function to process credit card data
+def process_credit_data(settings_file='config/settings.json'):
+    """
+    Processes credit card data by classifying descriptions into general and detailed categories,
+    filtering transactions based on a 12-month cutoff, and summarizing debit transactions.
+
+    Parameters:
+    settings_file (str): Path to the settings JSON file containing the file locations.
+
+    Returns:
+    credit_df (DataFrame): Processed credit card transactions with categorized descriptions.
+    monthly_credit_summary_df (DataFrame): Summary of debit transactions by 'YearMonth' and 'General Description'.
+    credit_debit_df (DataFrame): Granular data is used in the identification of repeated transactions later
+    """
+
+    # Extract file paths from settings
+    location = settings['location']
+    credit_card_file = settings['credit_card_file']
+
+    # Load credit card data
+    credit_df = pd.read_csv(f"{location}/{credit_card_file}")
+
+    # Classify General Description
+    credit_description_to_category = dicts.CREDIT_DESCRIPTION_TO_CATEGORY
+    def classify_credit_description(row):
+        description = row['Description']
+        for key, category in credit_description_to_category.items():
+            if key in description:
+                return category
+        return row['Category']  # Default to original category if no match is found
+
+    credit_df['General Description'] = credit_df.apply(classify_credit_description, axis=1)
+
+    # Classify Detailed Description
+    credit_description_to_detail_category = dicts.CREDIT_DESCRIPTION_TO_DETAIL_CATEGORY
+    def classify_detailed_description(row):
+        description = row['Description']
+        for key, detail_category in credit_description_to_detail_category.items():
+            if key in description:
+                return detail_category
+        return row['Category']  # Default to original category if no match is found
+
+    credit_df['Detailed Description'] = credit_df.apply(classify_detailed_description, axis=1)
+
+    # Get the current date and calculate the cutoff date (12 months ago)
+    now = datetime.now()
+    cutoff_date = (now - pd.DateOffset(months=12)).replace(day=1)
+
+    # Convert 'Transaction Date' to datetime format
+    credit_df['Transaction Date'] = pd.to_datetime(credit_df['Transaction Date'])
+
+    # Filter transactions that are older than 12 months and exclude transactions from the current month
+    credit_df = credit_df[
+        (credit_df['Transaction Date'] < pd.Timestamp(now.replace(day=1))) & 
+        (credit_df['Transaction Date'] >= cutoff_date)
+    ]
+
+    # Add 'YearMonth' column for easy grouping
+    credit_df['YearMonth'] = credit_df['Transaction Date'].dt.to_period('M')
+
+    # Drop 'Credit' column to focus on debit transactions
+    credit_debit_df = credit_df.drop(columns=['Credit'])
+
+    # Summarize debit transactions by 'YearMonth' and 'General Description'
+    monthly_credit_summary_df = credit_debit_df.groupby(['YearMonth', 'General Description'])['Debit'].sum().reset_index()
+
+    # Remove rows where Debit equals 0
+    monthly_credit_summary_df = monthly_credit_summary_df[monthly_credit_summary_df['Debit'] != 0]
+
+    return credit_df, monthly_credit_summary_df, credit_debit_df
+
+# Call process_credit_data
+# we needs to return the very granular credit_debit_df because it is used in the identification of repeated transactions
+credit_df, monthly_credit_summary_df, credit_debit_df = process_credit_data()
 
 
-# Process credit card data
-# Load credit card data
-credit_df = pd.read_csv(f"{location}/{credit_card_file}")
-
-
-# This is where we add the Category
-# Category is used for the Category donut charts
-credit_description_to_category = dicts.CREDIT_DESCRIPTION_TO_CATEGORY
-def classify_credit_description(row):
-    description = row['Description']
-    for key, category in credit_description_to_category.items():
-        if key in description:
-            return category
-    return row['Category']
-
-credit_df['General Description'] = credit_df.apply(classify_credit_description, axis=1)
-
-
-# Detailed Category is for the breakdown of expenses
-# to be used for eliminating "Luxury" expenses (e.g. Uber)
-# and to determine what specific expenses are increasing/decreasing
-credit_description_to_detail_category = dicts.CREDIT_DESCRIPTION_TO_DETAIL_CATEGORY
-def classify_detailed_description(row):
-    description = row['Description']
-    for key, detail_category in credit_description_to_detail_category.items():
-        if key in description:
-            return detail_category
-    return row['Category']  # or return the original category if you prefer
-
-credit_df['Detailed Description'] = credit_df.apply(classify_detailed_description, axis=1)
-
-now = datetime.now()
-cutoff_date = (now - pd.DateOffset(months=12)).replace(day=1)
-
-credit_df['Transaction Date'] = pd.to_datetime(credit_df['Transaction Date'])
-
-# Filter out transactions from the current month and year, and those older than 12 months
-credit_df = credit_df[
-    (credit_df['Transaction Date'] < pd.Timestamp(now.replace(day=1))) & 
-    (credit_df['Transaction Date'] >= cutoff_date)
-]
-
-
-credit_df['YearMonth'] = credit_df['Transaction Date'].dt.to_period('M')
-
-
-
-
-
-
-# Combine and summarize debit data
-credit_debit_df = credit_df.drop(columns=['Credit'])
-monthly_credit_summary_df = credit_debit_df.groupby(['YearMonth', 'General Description'])['Debit'].sum().reset_index()
-monthly_credit_summary_df = monthly_credit_summary_df[monthly_credit_summary_df['Debit'] != 0]
 
 # Combine summaries and add expense types
 monthly_summary_df = pd.concat([monthly_bank_debit_summary_df, monthly_credit_summary_df], ignore_index=True)
