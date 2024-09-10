@@ -3,5 +3,7 @@ For the moment this works only for CapitalOne data, I will add to this shortly. 
 If you would like to use this script in Jupyter Notebook change and run the below code below before you run the Budget program.
 
 import os
+
 os.getcwd()
+
 os.chdir('/path/to/budget_config/folder')
