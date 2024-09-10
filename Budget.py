@@ -395,7 +395,7 @@ ax_33.grid(True)
 
 
 
-#import seaborn as sns
+# In order to maintain the formatting I am including two throwaway graphs from Anscombe's quartet
 
 # Load the Anscombe's quartet dataset
 anscombe_df = sns.load_dataset('anscombe')
