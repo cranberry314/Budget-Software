@@ -27,11 +27,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
 from matplotlib.backends.backend_pdf import PdfPages
+import seaborn as sns
 import json
-import config.dictionaries as dicts
+import budget_config.dictionaries as dicts
 
 # Read settings from JSON configuration file
-with open('config/settings.json') as f:
+with open('budget_config/settings.json') as f:
     settings = json.load(f)
 
 
@@ -332,9 +333,9 @@ sorted_repeating_charges_df = filtered_repeating_charges_df.sort_values(by='Debi
 total_sum_repeating_charges = sorted_repeating_charges_df['Debit'].sum()
 
 # Display the filtered DataFrame
-print("Repeating Charges for at least 6 months, less than $25.00, and present in the most recent month:")
-print(sorted_repeating_charges_df)
-print(total_sum_repeating_charges)
+#print("Repeating Charges for at least 6 months, less than $25.00, and present in the most recent month:")
+#print(sorted_repeating_charges_df)
+#print(total_sum_repeating_charges)
 
 # Print the repeating charges table on the top left corner of the second page
 axs[0, 0].axis('off')
@@ -351,7 +352,7 @@ gs = GridSpec(2, 2, figure=fig2)  # Create a new grid for the existing figure
 inner_grid = gs[0, 1].subgridspec(3, 1, hspace=1.5)  # Divide the top-right corner into a 3x1 grid
 
 
-import seaborn as sns
+
 
 # Create Uber dataframe for graphing
 uber_monthly_totals = monthly_detailed_summary_df[monthly_detailed_summary_df['Detailed Description'] == 'Uber'].reset_index()
