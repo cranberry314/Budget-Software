@@ -6,4 +6,4 @@ import os
 
 os.getcwd()
 
-os.chdir('/path/to/budget_config/folder')
+os.chdir('/path/to/folder/budget_config/')
